@@ -2,6 +2,10 @@ import yaml
 from inference import RiskSignalDetector
 import numpy as np
 import time
+from sklearn.metrics import accuracy_score,f1_score,classification_report
+from preprocessor import Preprocessor
+import os
+import psutil
 
 class Benchmark:
     def __init__(self,config_path):
@@ -54,7 +58,39 @@ class Benchmark:
             'batch_inference': batch_inference_results
         }
     
+    #benchmarking the accuracy/other metrics of the model
     def benchmark_accuracy(self, model_path, test_data):
         predictor = RiskSignalDetector(model_path,'config/config.yaml')
-        
+        predictions = []
+        true_values = []
+        for _,row in test_data.iterrows():
+            result = predictor.prediction_for_single_text(row['text'])
+            predictions.append(result['predicted_class'])
+            true_values.append(row['risk_label'])
+        accuracy = accuracy_score(true_values,predictions)
+        f1 = f1_score(true_values,predictions)
+        return {
+            "model_path": model_path,
+            "accuracy": accuracy,
+            "f1_score": f1,
+            'classification_report': classification_report(true_values,predictions)
+        }
+    
+    #benchmarking memory used by each model
+    def benchmark_memory(self,model_path):
+        process = psutil.Process(os.getpid())
+        memory_before = process.memory_info().rss / 1024 / 1024 #get memory used in MB
+        predictor = RiskSignalDetector(model_path,'config/config.yaml')
+        memory_after = process.memory_info().rss / 1024 / 1024
+        memory_used = memory_after - memory_before
+        #get num of parameters of the model
+        num_params = sum(p.numel() for p in predictor.model.parameters())
+        model_size_mb = sum(p.numel() * p.element_size() for p in predictor.model.parameters()) / 1024 / 1024
+        return {
+            'model_path': model_path,
+            'memory_usage_mb': memory_used,
+            'model_size_mb': model_size_mb,
+            'num_parameters': num_params
+        }
+
     
