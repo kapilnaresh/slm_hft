@@ -1,0 +1,36 @@
+# Model Configuration
+models:
+  distilbert:
+    name: "distilbert-base-uncased"
+    max_length: 512
+    batch_size: 16
+  tinybert:
+    name: "huawei-noah/TinyBERT_General_4L_312D"
+    max_length: 512
+    batch_size: 32
+
+# Risk Categories
+risk_categories:
+  0: "NO_RISK"
+  1: "MARKET_RISK" 
+  2: "COMPANY_RISK"
+  3: "REGULATORY_RISK"
+
+# Data Collection
+data:
+  tickers: ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA", "META", "AMZN"]
+  news_sources: ["yahoo", "reddit", "sec_filings"]
+  sample_size: 1000
+
+# Training
+training:
+  epochs: 3
+  learning_rate: 2e-5
+  warmup_steps: 500
+  eval_steps: 100
+
+# Benchmarking
+benchmarking:
+  num_runs: 100
+  batch_sizes: [1, 10, 50, 100]
+  device: "mps"  # For M2 Mac
