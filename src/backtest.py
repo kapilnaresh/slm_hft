@@ -13,6 +13,7 @@ class Backtester:
         self.portfolio_values = []
         self.risk_signals = []
     
+    #load stock data from yahoo for specified dates to test
     def load_data(self, tickers,start_date,end_date):
         data = {}
         for ticker in tickers:
@@ -23,6 +24,7 @@ class Backtester:
             data[ticker] = adj
         return pd.DataFrame(data).dropna()
 
+    #simulate news/signals of market risk or company risk randomly
     def simulate_signals(self,dates,tickers):
         np.random.seed(42)
         signals = []
@@ -37,3 +39,39 @@ class Backtester:
                         'confidence': np.random.uniform(0.7,0.95)
                     })
         return pd.DataFrame(signals)
+    
+    def allocation_size(self,ticker,signal):
+        base_allocation = 0.1
+        if signal['risk_type'] == 'MARKET_RISK':
+            base_allocation *= 0.5
+        elif signal['risk_type'] == 'COMPANY_RISK':
+            base_allocation = 0.0
+        return base_allocation
+
+    def trade(self, ticker, action, size, price, date):
+        if action == 'BUY':
+            cost = size * price
+            if cost <= self.capital:
+                self.positions[ticker] = self.positions.get(ticker,0) + size
+                self.capital -= cost
+                self.trades.append({
+                    "date": date,
+                    "ticker": ticker,
+                    "action": action,
+                    "size": size,
+                    "price": price,
+                    "value": cost
+                })
+        elif action == "SELL":
+            if ticker in self.positions and self.positions[ticker] >= size:
+                self.positions[ticker] -= size
+                self.capital += size * price
+                self.trades.append({
+                    "date": date,
+                    "ticker": ticker,
+                    "action": action,
+                    "size": size,
+                    "price": price,
+                    "value": price * size
+                })
+        
