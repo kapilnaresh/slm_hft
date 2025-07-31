@@ -1,7 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-
+import matplotlib.pyplot as plt
 
 
 class Backtester:
@@ -109,7 +109,7 @@ class Backtester:
                     elif risk_type == 'MARKET_RISK':
                         for ticker_idx in list(self.positions.keys()):
                             if self.positions[ticker_idx] > 0:
-                                self.trade(ticker_idx, 'SELL', self.positions[ticker_idx] * 0.5,current_prices[ticker_idx,date])
+                                self.trade(ticker_idx, 'SELL', self.positions[ticker_idx] * 0.5,current_prices[ticker_idx],date)
 
             if i % 30 == 0:
                 target_per_stock = (self.capital + sum(self.positions.get(t,0) * current_prices[t] for t in tickers))
@@ -129,3 +129,116 @@ class Backtester:
         results['trades'] = pd.DataFrame(self.trades)
         results['portfolio_values'] = portfolio_df
         return results
+    
+
+    def compute_metrics(self,portfolio_df, benchmark_returns):
+        portfolio_returns = portfolio_df['returns'].dropna()
+        total_return = (portfolio_df['total_value'].iloc(-1) / self.initial_capital) * 100
+        days = len(portfolio_returns)
+        annualized_return = ((portfolio_df['total'].iloc[-1] / self.initial_capital) ** (252/days) - 1) * 100
+        volatility = portfolio_returns.std() * np.sqrt(252) * 100
+        # Sharpe ratio (assume 2% risk-free rate)
+        risk_free_rate = 0.02
+        sharpe_ratio = (annualized_return/100 - risk_free_rate) / (volatility/100)
+                # Maximum drawdown
+        rolling_max = portfolio_df['total'].expanding().max()
+        drawdown = (portfolio_df['total'] - rolling_max) / rolling_max
+        max_drawdown = drawdown.min() * 100    
+        # Win rate
+        win_rate = (portfolio_returns > 0).mean() * 100
+        
+        # Benchmark comparison
+        benchmark_total_return = ((1 + benchmark_returns).prod() - 1) * 100
+        return {
+            'total_return': total_return,
+            'annualized_return': annualized_return,
+            'volatility': volatility,
+            'sharpe_ratio': sharpe_ratio,
+            'max_drawdown': max_drawdown,
+            'win_rate': win_rate,
+            'benchmark_return': benchmark_total_return,
+            'alpha': total_return - benchmark_total_return,
+            'num_trades': len(self.trades)
+        }
+
+
+    def plot_results(self, results):
+        """Plot backtest results"""
+        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+        
+        portfolio_df = results['portfolio_values']
+        
+        # Portfolio value over time
+        axes[0, 0].plot(portfolio_df['date'], portfolio_df['total'], label='Strategy')
+        axes[0, 0].plot(portfolio_df['date'], 
+                       [self.initial_capital * (1 + results['benchmark_return']/100 * i/len(portfolio_df)) 
+                        for i in range(len(portfolio_df))], 
+                       label='Benchmark', linestyle='--')
+        axes[0, 0].set_title('Portfolio Value Over Time')
+        axes[0, 0].set_ylabel('Portfolio Value ($)')
+        axes[0, 0].legend()
+        
+        # Drawdown
+        rolling_max = portfolio_df['total'].expanding().max()
+        drawdown = (portfolio_df['total'] - rolling_max) / rolling_max * 100
+        axes[0, 1].fill_between(portfolio_df['date'], drawdown, 0, alpha=0.3, color='red')
+        axes[0, 1].set_title('Drawdown')
+        axes[0, 1].set_ylabel('Drawdown (%)')
+        
+        # Returns distribution
+        returns = portfolio_df['returns'].dropna()
+        axes[1, 0].hist(returns, bins=50, alpha=0.7)
+        axes[1, 0].set_title('Returns Distribution')
+        axes[1, 0].set_xlabel('Daily Returns')
+        axes[1, 0].set_ylabel('Frequency')
+        
+        # Performance metrics
+        metrics_text = f"""
+        Total Return: {results['total_return']:.2f}%
+        Annualized Return: {results['annualized_return']:.2f}%
+        Volatility: {results['volatility']:.2f}%
+        Sharpe Ratio: {results['sharpe_ratio']:.2f}
+        Max Drawdown: {results['max_drawdown']:.2f}%
+        Alpha: {results['alpha']:.2f}%
+        Number of Trades: {results['num_trades']}
+        """
+        axes[1, 1].text(0.1, 0.9, metrics_text, transform=axes[1, 1].transAxes, 
+                        fontsize=10, verticalalignment='top', fontfamily='monospace')
+        axes[1, 1].set_title('Performance Metrics')
+        axes[1, 1].axis('off')
+        
+        plt.tight_layout()
+        plt.savefig('backtest_results.png', dpi=300, bbox_inches='tight')
+        plt.show()
+
+def driver():
+    # Initialize backtester
+    backtester = Backtester(initial_capital=100000)
+    
+    # Load market data
+    tickers = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'NVDA']
+    start_date = '2023-01-01'
+    end_date = '2024-01-01'
+    
+    market_data = backtester.load_data(tickers, start_date, end_date)
+    
+    # Simulate risk signals
+    risk_signals = backtester.simulate_signals(market_data.index, tickers)
+    
+    print(f"Loaded {len(market_data)} days of market data")
+    print(f"Generated {len(risk_signals)} risk signals")
+    
+    # Run backtest
+    results = backtester.run_backtest(market_data, risk_signals)
+    
+    # Display results
+    print("\n=== Backtest Results ===")
+    for metric, value in results.items():
+        if isinstance(value, (int, float)):
+            print(f"{metric}: {value:.2f}")
+    
+    # Plot results
+    backtester.plot_results(results)
+
+if __name__ == "__main__":
+    driver()
