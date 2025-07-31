@@ -40,6 +40,7 @@ class Backtester:
                     })
         return pd.DataFrame(signals)
     
+    #decide how much to allocate depending on risk
     def allocation_size(self,ticker,signal):
         base_allocation = 0.1
         if signal['risk_type'] == 'MARKET_RISK':
@@ -47,7 +48,9 @@ class Backtester:
         elif signal['risk_type'] == 'COMPANY_RISK':
             base_allocation = 0.0
         return base_allocation
+    
 
+    #execute trades
     def trade(self, ticker, action, size, price, date):
         if action == 'BUY':
             cost = size * price
@@ -74,4 +77,55 @@ class Backtester:
                     "price": price,
                     "value": price * size
                 })
+
+    #calculate total value of portfolio
+    def calculate_portfolio(self,prices,date):
+        capital = self.capital
+        stock_value = 0
+        for ticker,shares in self.positions.items():
+            if ticker in prices:
+                stock_value += shares * prices[ticker]
+        total_value = capital + stock_value
+        self.portfolio_values.append({
+            'date': date,
+            'cash': capital,
+            'stocks_value': stock_value,
+            'total_value': total_value
+        })
+        return total_value
+    
+    def run_backtest(self,market_data,risk_signals):
+        tickers = market_data.columns.tolist()
+        for i,date in enumerate(market_data.index):
+            current_prices = market_data.loc[date]
+            day_signals = risk_signals[risk_signals['date'] == date]
+            if(len(day_signals) > 0):
+                for _,signal in day_signals.iterrows():
+                    ticker = signal['ticker']
+                    risk_type = signal['risk_type']
+                    if risk_type == 'COMPANY_RISK':
+                        if ticker in self.positions and self.positions[ticker] > 0:
+                            self.trade(ticker,'SELL', self.positions[ticker],current_prices[ticker],date)
+                    elif risk_type == 'MARKET_RISK':
+                        for ticker_idx in list(self.positions.keys()):
+                            if self.positions[ticker_idx] > 0:
+                                self.trade(ticker_idx, 'SELL', self.positions[ticker_idx] * 0.5,current_prices[ticker_idx,date])
+
+            if i % 30 == 0:
+                target_per_stock = (self.capital + sum(self.positions.get(t,0) * current_prices[t] for t in tickers))
+                for ticker in tickers:
+                    target_shares = target_per_stock / current_prices[ticker]
+                    current_shares = self.positions.get(ticker,0)
+                    if(target_shares > current_shares * 1.2):
+                        buy_shares = min(target_shares-current_shares,self.capital/current_prices[ticker] * 0.1)
+                        if(buy_shares > 0):
+                            self.trade(ticker,'BUY', buy_shares, current_prices[ticker],date)
         
+        portfolio_df = pd.DataFrame(self.portfolio_values)
+        portfolio_df['returns'] = portfolio_df['total_value'].pct_change()
+
+        benchmark_return = market_data.mean(axis=1).pct_change()
+        results = self.calculate_metrics(portfolio_df,benchmark_return)
+        results['trades'] = pd.DataFrame(self.trades)
+        results['portfolio_values'] = portfolio_df
+        return results
