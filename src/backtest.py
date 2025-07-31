@@ -17,12 +17,13 @@ class Backtester:
     def load_data(self, tickers,start_date,end_date):
         data = {}
         for ticker in tickers:
-            data = yf.download(ticker,start=start_date,end=end_date,auto_adjust=False)
-            adj = data['Adj Close']
+            stock_data = yf.download(ticker,start=start_date,end=end_date,auto_adjust=False)
+            adj = stock_data['Adj Close']
             if isinstance(adj,pd.DataFrame):
                 adj = adj.squeeze()
             data[ticker] = adj
         return pd.DataFrame(data).dropna()
+    
 
     #simulate news/signals of market risk or company risk randomly
     def simulate_signals(self,dates,tickers):
@@ -111,21 +112,22 @@ class Backtester:
                             if self.positions[ticker_idx] > 0:
                                 self.trade(ticker_idx, 'SELL', self.positions[ticker_idx] * 0.5,current_prices[ticker_idx],date)
 
-            if i % 30 == 0:
+            if i % 20 == 0:
                 target_per_stock = (self.capital + sum(self.positions.get(t,0) * current_prices[t] for t in tickers))
                 for ticker in tickers:
+                    current_value = self.positions.get(ticker, 0) * current_prices[ticker]
                     target_shares = target_per_stock / current_prices[ticker]
                     current_shares = self.positions.get(ticker,0)
-                    if(target_shares > current_shares * 1.2):
+                    if(target_shares > current_shares * 1.1):
                         buy_shares = min(target_shares-current_shares,self.capital/current_prices[ticker] * 0.1)
                         if(buy_shares > 0):
                             self.trade(ticker,'BUY', buy_shares, current_prices[ticker],date)
-        
+            portfolio_value = self.calculate_portfolio(current_prices, date)
         portfolio_df = pd.DataFrame(self.portfolio_values)
         portfolio_df['returns'] = portfolio_df['total_value'].pct_change()
 
         benchmark_return = market_data.mean(axis=1).pct_change()
-        results = self.calculate_metrics(portfolio_df,benchmark_return)
+        results = self.compute_metrics(portfolio_df,benchmark_return)
         results['trades'] = pd.DataFrame(self.trades)
         results['portfolio_values'] = portfolio_df
         return results
@@ -133,16 +135,16 @@ class Backtester:
 
     def compute_metrics(self,portfolio_df, benchmark_returns):
         portfolio_returns = portfolio_df['returns'].dropna()
-        total_return = (portfolio_df['total_value'].iloc(-1) / self.initial_capital) * 100
+        total_return = (portfolio_df['total_value'].iloc[-1] / self.initial_capital - 1) * 100
         days = len(portfolio_returns)
-        annualized_return = ((portfolio_df['total'].iloc[-1] / self.initial_capital) ** (252/days) - 1) * 100
+        annualized_return = ((portfolio_df['total_value'].iloc[-1] / self.initial_capital) ** (252/days) - 1) * 100
         volatility = portfolio_returns.std() * np.sqrt(252) * 100
         # Sharpe ratio (assume 2% risk-free rate)
         risk_free_rate = 0.02
         sharpe_ratio = (annualized_return/100 - risk_free_rate) / (volatility/100)
                 # Maximum drawdown
-        rolling_max = portfolio_df['total'].expanding().max()
-        drawdown = (portfolio_df['total'] - rolling_max) / rolling_max
+        rolling_max = portfolio_df['total_value'].expanding().max()
+        drawdown = (portfolio_df['total_value'] - rolling_max) / rolling_max
         max_drawdown = drawdown.min() * 100    
         # Win rate
         win_rate = (portfolio_returns > 0).mean() * 100
@@ -169,7 +171,7 @@ class Backtester:
         portfolio_df = results['portfolio_values']
         
         # Portfolio value over time
-        axes[0, 0].plot(portfolio_df['date'], portfolio_df['total'], label='Strategy')
+        axes[0, 0].plot(portfolio_df['date'], portfolio_df['total_value'], label='Strategy')
         axes[0, 0].plot(portfolio_df['date'], 
                        [self.initial_capital * (1 + results['benchmark_return']/100 * i/len(portfolio_df)) 
                         for i in range(len(portfolio_df))], 
@@ -179,8 +181,8 @@ class Backtester:
         axes[0, 0].legend()
         
         # Drawdown
-        rolling_max = portfolio_df['total'].expanding().max()
-        drawdown = (portfolio_df['total'] - rolling_max) / rolling_max * 100
+        rolling_max = portfolio_df['total_value'].expanding().max()
+        drawdown = (portfolio_df['total_value'] - rolling_max) / rolling_max * 100
         axes[0, 1].fill_between(portfolio_df['date'], drawdown, 0, alpha=0.3, color='red')
         axes[0, 1].set_title('Drawdown')
         axes[0, 1].set_ylabel('Drawdown (%)')
@@ -239,6 +241,7 @@ def driver():
     
     # Plot results
     backtester.plot_results(results)
+    print(backtester.portfolio_values)
 
 if __name__ == "__main__":
     driver()
