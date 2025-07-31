@@ -15,6 +15,7 @@ risk_categories:
   1: "MARKET_RISK" 
   2: "COMPANY_RISK"
   3: "REGULATORY_RISK"
+  4: "POSITIVE"
 
 # Data Collection
 data:
