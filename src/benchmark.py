@@ -166,9 +166,7 @@ def driver():
    ] * 25  # 100 test texts
    #test_data = pd.read_csv('data/synthetic_data.csv').sample(200)
    processer = Preprocessor('config/config.yaml')
-   test_data = processer.load_data()
-   test_data = processer.preprocess(test_data)
-   test_data= test_data.sample(200)
+   test_data = processer.preprocess(processer.load_data()[1])
    model_paths = [
        'models/distilbert',
        'models/tinybert'  # If available
