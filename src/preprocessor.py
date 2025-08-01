@@ -37,30 +37,25 @@ class Preprocessor:
     #load real and synthetic data
     def load_data(self) -> pd.DataFrame:
         try:
-            real_data = pd.read_csv('data/real_financial_news.csv')
-            print(f"Loaded {len(real_data)} unlabeled real articles")
+            train_data = pd.read_csv('data/stock_news_categorized.csv')
+            print(f"Loaded {len(train_data)} articles")
         except FileNotFoundError:
             print("No real data found")
         
-        synthetic_data = pd.read_csv('data/synthetic_data.csv')
-        print(f"Loaded {len(synthetic_data)} labeled synthetic articles")
+        unseen_test_data = pd.read_csv('data/unseen_categorized_stock_news.csv')
+        print(f"Loaded {len(unseen_test_data)} unseen articles")
         
         # use synthetic data for training
-        return synthetic_data
+        return train_data,unseen_test_data
     
     #clean up title and summary (remove non letters)
     def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
-        df['text'] = df['title'].fillna('') + ' ' + df['summary'].fillna('')
-        df['text'] = df['text'].str.replace(r'[^\w\s]', ' ', regex=True)
-        df['text'] = df['text'].str.replace(r'\s+', ' ', regex=True)
-        df['text'] = df['text'].str.strip()
-        df = df[df['text'].str.len() > 10]
-        
+        df['text'] = df['headline'].str.strip()     
         return df
     
     #create pytorch appropriate datasets for training, validating and testing
     def train_test_val_split(self, model_name: str):
-        df = self.load_data()
+        df = self.load_data()[0]
         df = self.preprocess(df)
         train_df, temp_df = train_test_split(df, test_size=0.3, random_state=42, stratify=df['risk_label'])
         val_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42, stratify=temp_df['risk_label'])
