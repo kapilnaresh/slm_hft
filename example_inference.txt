@@ -1,0 +1,24 @@
+=== Single Predictions ===
+Text: Apple reports strong quarterly earnings beating analyst expectations...
+Risk: POSITIVE
+Confidence: 0.821
+Latency: 125.44ms
+--------------------------------------------------
+Text: Market volatility spikes as Tesla drops 15% in heavy trading...
+Risk: MARKET_RISK
+Confidence: 0.873
+Latency: 40.29ms
+--------------------------------------------------
+Text: SEC launches investigation into Meta's data privacy practices...
+Risk: COMPANY_RISK
+Confidence: 0.843
+Latency: 38.29ms
+--------------------------------------------------
+Text: Microsoft announces regular dividend payment increase...
+Risk: POSITIVE
+Confidence: 0.972
+Latency: 38.55ms
+--------------------------------------------------
+
+=== Batch Prediction ===
+Average batch latency: 3.09ms per text
