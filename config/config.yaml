@@ -25,10 +25,10 @@ data:
 
 # Training
 training:
-  epochs: 3
+  epochs: 2
   learning_rate: 2e-5
-  warmup_steps: 500
-  eval_steps: 100
+  warmup_steps: 100
+  eval_steps: 500
 
 # Benchmarking
 benchmarking:
