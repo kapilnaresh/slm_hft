@@ -2,30 +2,61 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-
+import os
+import finnhub
+from inference import RiskSignalDetector
+import datetime
 
 class Backtester:
-    def __init__(self, initial_capital):
+    def __init__(self, initial_capital, start_date, end_date):
         self.initial_capital = initial_capital
         self.capital = initial_capital
         self.positions = {}
         self.trades = []
         self.portfolio_values = []
         self.risk_signals = []
+        self.start_date = start_date
+        self.end_date = end_date
     
     #load stock data from yahoo for specified dates to test
-    def load_data(self, tickers,start_date,end_date):
+    def load_data(self, tickers):
         data = {}
         for ticker in tickers:
-            stock_data = yf.download(ticker,start=start_date,end=end_date,auto_adjust=False)
+            stock_data = yf.download(ticker,start=self.start_date,end=self.end_date,auto_adjust=False)
             adj = stock_data['Adj Close']
             if isinstance(adj,pd.DataFrame):
                 adj = adj.squeeze()
             data[ticker] = adj
         return pd.DataFrame(data).dropna()
     
-
+    def load_news(self, tickers):
+        finnhub_client = finnhub.Client(api_key=os.getenv("FINHUB_API"))
+        overall_data = {}
+        for ticker in tickers:
+            company_news = finnhub_client.company_news(ticker,self.start_date,self.end_date)
+            overall_data[ticker] = company_news
+        return overall_data
+    
+    def get_signals(self,tickers,model_path):
+        predictor = RiskSignalDetector(model_path, 'config/config.yaml')
+        news_data = self.load_news(tickers)
+        signals = []
+        for ticker in tickers:
+            company_news = news_data[ticker]
+            for news_item in company_news:
+                text = news_item["headline"] + " " + news_item["summary"]
+                date = datetime.datetime.fromtimestamp(news_item["datetime"])
+                prediction = predictor.prediction_for_single_text(text)
+                signals.append({
+                    "date": date,
+                    "ticker": ticker,
+                    "risk_type": prediction["predicted_risk"],
+                    "confidence": f"{max(prediction['probabilities']):.3f}"
+                })
+        return pd.DataFrame(signals)
+                
     #simulate news/signals of market risk or company risk randomly
+    '''
     def simulate_signals(self,dates,tickers):
         np.random.seed(42)
         signals = []
@@ -40,15 +71,7 @@ class Backtester:
                         'confidence': np.random.uniform(0.7,0.95)
                     })
         return pd.DataFrame(signals)
-    
-    #decide how much to allocate depending on risk
-    def allocation_size(self,ticker,signal):
-        base_allocation = 0.1
-        if signal['risk_type'] == 'MARKET_RISK':
-            base_allocation *= 0.5
-        elif signal['risk_type'] == 'COMPANY_RISK':
-            base_allocation = 0.0
-        return base_allocation
+    '''
     
 
     #execute trades
@@ -106,11 +129,14 @@ class Backtester:
                     risk_type = signal['risk_type']
                     if risk_type == 'COMPANY_RISK':
                         if ticker in self.positions and self.positions[ticker] > 0:
-                            self.trade(ticker,'SELL', self.positions[ticker],current_prices[ticker],date)
+                            self.trade(ticker,'SELL', self.positions[ticker] * 0.8,current_prices[ticker],date)
                     elif risk_type == 'MARKET_RISK':
                         for ticker_idx in list(self.positions.keys()):
                             if self.positions[ticker_idx] > 0:
                                 self.trade(ticker_idx, 'SELL', self.positions[ticker_idx] * 0.5,current_prices[ticker_idx],date)
+                    elif risk_type == 'REGULATORY_RISK':
+                        if ticker in self.positions and self.positions[ticker] > 0:
+                            self.trade(ticker,'SELL', self.positions[ticker] * 0.6,current_prices[ticker],date)
 
             if i % 20 == 0:
                 target_per_stock = (self.capital + sum(self.positions.get(t,0) * current_prices[t] for t in tickers))
@@ -167,9 +193,7 @@ class Backtester:
     def plot_results(self, results):
         """Plot backtest results"""
         fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-        
         portfolio_df = results['portfolio_values']
-        
         # Portfolio value over time
         axes[0, 0].plot(portfolio_df['date'], portfolio_df['total_value'], label='Strategy')
         axes[0, 0].plot(portfolio_df['date'], 
@@ -179,21 +203,18 @@ class Backtester:
         axes[0, 0].set_title('Portfolio Value Over Time')
         axes[0, 0].set_ylabel('Portfolio Value ($)')
         axes[0, 0].legend()
-        
         # Drawdown
         rolling_max = portfolio_df['total_value'].expanding().max()
         drawdown = (portfolio_df['total_value'] - rolling_max) / rolling_max * 100
         axes[0, 1].fill_between(portfolio_df['date'], drawdown, 0, alpha=0.3, color='red')
         axes[0, 1].set_title('Drawdown')
         axes[0, 1].set_ylabel('Drawdown (%)')
-        
         # Returns distribution
         returns = portfolio_df['returns'].dropna()
         axes[1, 0].hist(returns, bins=50, alpha=0.7)
         axes[1, 0].set_title('Returns Distribution')
         axes[1, 0].set_xlabel('Daily Returns')
         axes[1, 0].set_ylabel('Frequency')
-        
         # Performance metrics
         metrics_text = f"""
         Total Return: {results['total_return']:.2f}%
@@ -215,17 +236,16 @@ class Backtester:
 
 def driver():
     # Initialize backtester
-    backtester = Backtester(initial_capital=100000)
+    backtester = Backtester(initial_capital=100000, start_date = '2024-08-30',end_date = '2025-06-30')
     
     # Load market data
-    tickers = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'NVDA']
-    start_date = '2023-01-01'
-    end_date = '2024-01-01'
+    tickers = ['AAPL', 'GOOGL', 'MSFT', 'NVDA', 'TSLA']
     
-    market_data = backtester.load_data(tickers, start_date, end_date)
+    
+    market_data = backtester.load_data(tickers)
     
     # Simulate risk signals
-    risk_signals = backtester.simulate_signals(market_data.index, tickers)
+    risk_signals = backtester.get_signals(tickers,'models/distilbert')
     
     print(f"Loaded {len(market_data)} days of market data")
     print(f"Generated {len(risk_signals)} risk signals")
@@ -241,7 +261,7 @@ def driver():
     
     # Plot results
     backtester.plot_results(results)
-    print(backtester.portfolio_values)
-
+    with open("trades.txt", "w") as f:
+        f.write(f"{backtester.trades}")
 if __name__ == "__main__":
     driver()
