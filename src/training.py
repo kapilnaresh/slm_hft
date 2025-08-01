@@ -41,7 +41,7 @@ class ModelTrainer:
             warmup_steps=self.config['training']['warmup_steps'],
             weight_decay=0.01,
             logging_dir=f'{output_dir}/logs',
-            logging_steps=10,
+            logging_steps=100,
             eval_steps=self.config['training']['eval_steps'],
             eval_strategy="steps",
             save_strategy="steps",
