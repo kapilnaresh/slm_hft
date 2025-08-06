@@ -28,26 +28,19 @@ This project implements and compares Small Language Models (SLMs) for real-time 
 ```
 slm-risk-detection/
 ├── data/
-│   ├── raw/                 # Raw financial news data
-│   ├── processed/           # Cleaned, labeled datasets
-│   └── synthetic/           # Generated training data
-├── models/
-│   ├── distilbert/          # Fine-tuned DistilBERT model
-│   ├── tinybert/           # Fine-tuned TinyBERT model
-│   └── checkpoints/        # Training checkpoints
 ├── src/
-│   ├── data_collection.py      # Yahoo Finance & SEC API integration
-│   ├── synthetic_data_generator.py  # Financial news synthesis
-│   ├── data_preprocessing.py   # Data cleaning and tokenization
-│   ├── model_training.py      # Model fine-tuning pipeline
-│   ├── inference_engine.py    # Real-time prediction engine
-│   ├── benchmarking.py        # Performance evaluation suite
-│   └── backtesting.py         # Financial validation framework
+│   ├── preprocessing.py   # Data cleaning and tokenization
+│   ├── training.py      # Model fine-tuning pipeline
+│   ├── inference.py    # Real-time prediction engine
+│   ├── benchmark.py        # Performance evaluation suite
+│   └── backtest.py         # Financial validation framework for day to day
+│   └── backtest.py         # Financial validation framework for minute to minute
 ├── config/
 │   └── config.yaml           # Model and training configuration
-├── results/                  # Benchmark outputs and visualizations
+├── README.md                  # README file
 ├── requirements.txt
-└── main.py                  # Main execution pipeline
+├── averaged_benchmark_results.csv #csv results of benchmark results averaged over 1000 runs
+├── averaged_benchmark_results.png  #plots of results of averaged benchmark
 ```
 
 ## Quick Start
