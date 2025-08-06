@@ -127,6 +127,7 @@ class Benchmark:
         axes[0, 0].set_xlabel('Mean Latency (ms)')
         axes[0, 0].set_ylabel('Accuracy')
         axes[0, 0].set_title('Latency vs Accuracy (bubble size = params)')
+        axes[0,0].set_ylim(0.0,1.0)
         for i, txt in enumerate(df['model_name']):
             axes[0, 0].annotate(txt, (df['mean_latency'].iloc[i], df['accuracy'].iloc[i]))
         axes[0, 1].bar(df['model_name'], df['memory_usage_mb'])
