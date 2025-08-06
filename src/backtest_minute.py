@@ -1,7 +1,3 @@
-# backtest_inverse.py
-"""
-Inverse strategy: Buy on bad news, sell on positive news, high-frequency backtest.
-"""
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -108,14 +104,15 @@ class InverseBacktester:
                 if price is not None:
                     # Inverse logic: Buy on BAD news, sell on POSITIVE news
                     if risk_type in ['COMPANY_RISK', 'MARKET_RISK', 'REGULATORY_RISK', 'NEGATIVE', 'NEGATIVE_NEWS']:
-                        shares_to_buy = min(self.capital * 0.05 / price, 10)
-                        if shares_to_buy > 0:
-                            self.trade(ticker, 'BUY', shares_to_buy, price, date)
-                    elif risk_type in ['POSITIVE', 'POSITIVE_NEWS']:
                         if self.positions.get(ticker, 0) > 0:
                             self.trade(ticker, 'SELL', self.positions[ticker], price, date)
+                    elif risk_type in ['POSITIVE', 'POSITIVE_NEWS']:
+                        shares_to_buy = max(self.capital * 0.05 / price, 10)
+                        if shares_to_buy > 0:
+                            self.trade(ticker, 'BUY', shares_to_buy, price, date)
                 signal_idx += 1
 
+            '''
             # New logic: If price is lower than 1 hour ago and most recent news is positive, buy some shares
             for ticker in tickers:
                 if i >= 60:
@@ -129,14 +126,46 @@ class InverseBacktester:
                                 shares_to_buy = min(self.capital * 0.05 / price_now, 10)
                                 if shares_to_buy > 0:
                                     self.trade(ticker, 'BUY', shares_to_buy, price_now, date)
+            '''
             self.calculate_portfolio(market_data.loc[date], date)
         portfolio_df = pd.DataFrame(self.portfolio_values)
         portfolio_df['returns'] = portfolio_df['total_value'].pct_change()
         return portfolio_df
 
+    def calculate_metrics(self, portfolio_df, market_data):
+        portfolio_returns = portfolio_df['returns'].dropna()
+        total_return = (portfolio_df['total_value'].iloc[-1] / self.initial_capital - 1) * 100
+        days = len(portfolio_returns)
+        if days > 0:
+            annualized_return = ((portfolio_df['total_value'].iloc[-1] / self.initial_capital) ** (252/days) - 1) * 100
+        else:
+            annualized_return = 0
+        volatility = portfolio_returns.std() * np.sqrt(252) * 100
+        risk_free_rate = 0.02
+        sharpe_ratio = (annualized_return/100 - risk_free_rate) / (volatility/100) if volatility > 0 else 0
+        rolling_max = portfolio_df['total_value'].expanding().max()
+        drawdown = (portfolio_df['total_value'] - rolling_max) / rolling_max
+        max_drawdown = drawdown.min() * 100
+        win_rate = (portfolio_returns > 0).mean() * 100
+        benchmark_returns = market_data.mean(axis=1).pct_change()
+        benchmark_total_return = ((1 + benchmark_returns).prod() - 1) * 100
+        alpha = total_return - benchmark_total_return
+        num_trades = len(self.trades)
+        return {
+            'total_return': total_return,
+            'annualized_return': annualized_return,
+            'volatility': volatility,
+            'sharpe_ratio': sharpe_ratio,
+            'max_drawdown': max_drawdown,
+            'win_rate': win_rate,
+            'benchmark_return': benchmark_total_return,
+            'alpha': alpha,
+            'num_trades': num_trades
+        }
+
 def main():
     initial_capital = 100000
-    tickers = ['AAPL', 'GOOGL', 'MSFT']
+    tickers = ["AAPL", "GOOGL", "MSFT", "TSLA", "NVDA", "META", "AMZN"]
     end_date = datetime.now()
     start_date = end_date - timedelta(days=7)
     backtester = InverseBacktester(initial_capital, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
@@ -145,7 +174,11 @@ def main():
     signals = backtester.get_signals(news_df, 'models/distilbert')
     signals.to_csv("singals_inverse.csv")
     portfolio_df = backtester.run_backtest(market_data, signals)
+    metrics = backtester.calculate_metrics(portfolio_df, market_data)
     print(f"Number of trades made: {len(backtester.trades)}")
+    print("\n=== Backtest Metrics ===")
+    for metric, value in metrics.items():
+        print(f"{metric}: {value:.2f}")
     plt.plot(portfolio_df['date'], portfolio_df['total_value'])
     plt.title('Inverse Strategy Portfolio Value Over Time (Second-by-Second)')
     plt.xlabel('Time')
