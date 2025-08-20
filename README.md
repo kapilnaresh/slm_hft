@@ -51,7 +51,7 @@ slm-risk-detection/
 ```bash
 # Clone the repository
 git clone https://github.com/kapil-naresh/slm-hft.git
-cd slm-gft
+cd slm-hft
 
 # Create virtual environment
 conda create -n risk_signals python=3.12
@@ -162,7 +162,7 @@ The benchmarking suite generates:
 
 ## Financial Validation
 
-### Backtesting Results
+### Backtesting Results (in Progress)
 
 ```
 N/A right now
