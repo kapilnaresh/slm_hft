@@ -1,4 +1,4 @@
-# Real-Time Risk Signal Detection Using Small Language Models in High-Frequency Trading (in Progress)
+# Real-Time Risk Signal Detection Using Small Language Models in High-Frequency Trading 
 
 
 ## Overview
